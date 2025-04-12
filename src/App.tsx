@@ -79,7 +79,16 @@ function App() {
   const getSpriteIcon = (type: Sprite['type'], size: number, className: string) => {
     switch (type) {
       case 'cat':
-        return <Cat size={size} className={className} />;
+        return (
+          <img 
+            src="https://quizizz.com/media/resource/gs/quizizz-media/quizzes/a16db854-0c67-4e98-9e27-590dd764bc38?w=200&h=200"
+            alt="Cat"
+            width={size * 4}   // make it 1.5x bigger
+            height={size * 4}
+            className={className}
+            style={{ pointerEvents: 'none' }}
+          />
+        );
       case 'dog':
         return <Dog size={size} className={className} />;
       case 'ball':
@@ -88,7 +97,7 @@ function App() {
         return <User size={size} className={className} />;
     }
   };
-
+  
   const animate = (time: number) => {
     setSprites(prev => prev.map(sprite => {
       if (sprite.animation.length === 0) return sprite;
