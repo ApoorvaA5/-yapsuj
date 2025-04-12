@@ -86,8 +86,8 @@ function App() {
           <img 
             src="https://quizizz.com/media/resource/gs/quizizz-media/quizzes/a16db854-0c67-4e98-9e27-590dd764bc38?w=200&h=200"
             alt="Cat"
-            width={size * 4}
-            height={size * 4}
+            width={size * 3}
+            height={size * 3}
             className={className}
             style={{ pointerEvents: 'none' }}
           />
