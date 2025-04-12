@@ -86,8 +86,8 @@ function App() {
           <img 
             src="https://quizizz.com/media/resource/gs/quizizz-media/quizzes/a16db854-0c67-4e98-9e27-590dd764bc38?w=200&h=200"
             alt="Cat"
-            width={size * 3}
-            height={size * 3}
+            width={size * 2.5}
+            height={size * 2.5}
             className={className}
             style={{ pointerEvents: 'none' }}
           />
@@ -127,10 +127,20 @@ function App() {
           newY += currentAnimation.value / 10;
           newAnimation = newAnimation.slice(1);
           break;
-        case 'turn':
-          newDirection = (sprite.direction + currentAnimation.value) % 360;
-          newAnimation = newAnimation.slice(1);
-          break;
+          case 'turn':
+            const turnStep = 10; // degrees per frame
+            const remaining = currentAnimation.value;
+          
+            const rotate = Math.min(turnStep, remaining); // don't over-rotate
+            newDirection = (sprite.direction + rotate) % 360;
+          
+            if (remaining - rotate <= 0) {
+              newAnimation = newAnimation.slice(1); // done turning
+            } else {
+              newAnimation[0] = { ...currentAnimation, value: remaining - rotate }; // update remaining
+            }
+            break;
+          
         case 'goto':
           if (currentAnimation.x !== undefined && currentAnimation.y !== undefined) {
             newX = currentAnimation.x;
