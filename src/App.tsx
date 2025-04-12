@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Cat, Dog, Circle, User, Plus, Play, Pause, Trash2, RotateCcw, ArrowRight, ArrowDown, RotateCw, Move, Command as Random, MessageCircle, Maximize2, Minimize2, Repeat, Settings, FileText, Edit, BookOpen, Bug, Volume2, Shirt } from 'lucide-react';
 
+// Keep all interfaces the same
 interface Sprite {
   id: string;
   type: 'cat' | 'dog' | 'ball' | 'human';
@@ -23,11 +24,13 @@ interface Animation {
 }
 
 function App() {
+  // Keep all state and functions the same until the return statement
   const [sprites, setSprites] = useState<Sprite[]>([]);
   const [selectedSprite, setSelectedSprite] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const animationFrameRef = useRef<number>();
 
+  // Keep all functions the same (addSprite, deleteSprite, resetAll, addAnimation, getSpriteIcon, animate)
   const addSprite = (type: Sprite['type']) => {
     const newSprite: Sprite = {
       id: `sprite-${Date.now()}`,
@@ -83,7 +86,7 @@ function App() {
           <img 
             src="https://quizizz.com/media/resource/gs/quizizz-media/quizzes/a16db854-0c67-4e98-9e27-590dd764bc38?w=200&h=200"
             alt="Cat"
-            width={size * 4}   // make it 1.5x bigger
+            width={size * 4}
             height={size * 4}
             className={className}
             style={{ pointerEvents: 'none' }}
@@ -302,7 +305,7 @@ function App() {
         </div>
 
         <div className="flex gap-4">
-          <div className="w-1/3 bg-purple-200 p-4 rounded-lg">
+          <div className="w-1/4 bg-purple-200 p-4 rounded-lg">
             <h2 className="text-xl font-bold mb-4">Actions</h2>
             
             <div className="space-y-4">
@@ -407,7 +410,7 @@ function App() {
             </div>
           </div>
 
-          <div className="w-2/3 bg-white p-4 rounded-lg relative" style={{ height: '600px' }}>
+          <div className="w-1/2 bg-white p-4 rounded-lg relative" style={{ height: '600px' }}>
             {sprites.map(sprite => (
               <div
                 key={sprite.id}
@@ -446,6 +449,45 @@ function App() {
                 )}
               </div>
             ))}
+          </div>
+
+          <div className="w-1/4 bg-purple-200 p-4 rounded-lg">
+            <h2 className="text-xl font-bold mb-4">Sprites</h2>
+            <div className="space-y-2">
+              {sprites.map((sprite, index) => (
+                <div 
+                  key={sprite.id}
+                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${
+                    selectedSprite === sprite.id ? 'bg-purple-300' : 'bg-purple-100 hover:bg-purple-200'
+                  }`}
+                  onClick={() => setSelectedSprite(sprite.id)}
+                >
+                  <div className="w-8 h-8 flex items-center justify-center">
+                    {getSpriteIcon(sprite.type, 24, `${
+                      sprite.type === 'cat' ? 'text-orange-500' :
+                      sprite.type === 'dog' ? 'text-brown-500' :
+                      sprite.type === 'ball' ? 'text-red-500' :
+                      'text-blue-500'
+                    }`)}
+                  </div>
+                  <span className="flex-1">Sprite {index + 1}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSprite(sprite.id);
+                    }}
+                    className="text-red-500 hover:text-red-700 p-1"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+              {sprites.length === 0 && (
+                <div className="text-center text-gray-500 p-4">
+                  No sprites added yet
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
