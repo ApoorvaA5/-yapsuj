@@ -282,7 +282,7 @@ function App() {
             </button>
             <button 
               onClick={() => addSprite('dog')}
-              className="flex items-center gap-2 bg-brown-500 text-white px-4 py-2 rounded-lg hover:bg-brown-600"
+              className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600"
             >
               <Plus size={20} /> Dog
             </button>
