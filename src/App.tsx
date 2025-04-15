@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Cat, Dog, Circle, User, Plus, Play, Pause, Trash2, RotateCcw, ArrowRight, ArrowDown, RotateCw, Move, Command as Random, MessageCircle, Maximize2, Minimize2, Repeat, Settings, FileText, Edit, BookOpen, Bug, Volume2, Shirt } from 'lucide-react';
 
-// Keep all interfaces the same
 interface Sprite {
   id: string;
   type: 'cat' | 'dog' | 'ball' | 'human';
@@ -24,13 +23,13 @@ interface Animation {
 }
 
 function App() {
-  // Keep all state and functions the same until the return statement
   const [sprites, setSprites] = useState<Sprite[]>([]);
   const [selectedSprite, setSelectedSprite] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const animationFrameRef = useRef<number>();
+  const stageRef = useRef<HTMLDivElement>(null);
 
-  // Keep all functions the same (addSprite, deleteSprite, resetAll, addAnimation, getSpriteIcon, animate)
   const addSprite = (type: Sprite['type']) => {
     const newSprite: Sprite = {
       id: `sprite-${Date.now()}`,
@@ -79,6 +78,45 @@ function App() {
     }));
   };
 
+  const handleDragStart = (e: React.DragEvent, spriteId: string) => {
+    if (isPlaying) return;
+    setIsDragging(true);
+    setSelectedSprite(spriteId);
+    e.dataTransfer.setData('text/plain', spriteId);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const spriteId = e.dataTransfer.getData('text/plain');
+    const stage = stageRef.current;
+    
+    if (stage) {
+      const stageRect = stage.getBoundingClientRect();
+      const x = e.clientX - stageRect.left;
+      const y = e.clientY - stageRect.top;
+      
+      setSprites(prev => prev.map(sprite => 
+        sprite.id === spriteId
+          ? { ...sprite, x, y }
+          : sprite
+      ));
+    }
+    
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
   const getSpriteIcon = (type: Sprite['type'], size: number, className: string) => {
     switch (type) {
       case 'cat':
@@ -100,7 +138,7 @@ function App() {
         return <User size={size} className={className} />;
     }
   };
-  
+
   const animate = (time: number) => {
     setSprites(prev => prev.map(sprite => {
       if (sprite.animation.length === 0) return sprite;
@@ -127,20 +165,18 @@ function App() {
           newY += currentAnimation.value / 10;
           newAnimation = newAnimation.slice(1);
           break;
-          case 'turn':
-            const turnStep = 10; // degrees per frame
-            const remaining = currentAnimation.value;
+        case 'turn':
+          const turnStep = 10;
+          const remaining = currentAnimation.value;
+          const rotate = Math.min(turnStep, remaining);
+          newDirection = (sprite.direction + rotate) % 360;
           
-            const rotate = Math.min(turnStep, remaining); // don't over-rotate
-            newDirection = (sprite.direction + rotate) % 360;
-          
-            if (remaining - rotate <= 0) {
-              newAnimation = newAnimation.slice(1); // done turning
-            } else {
-              newAnimation[0] = { ...currentAnimation, value: remaining - rotate }; // update remaining
-            }
-            break;
-          
+          if (remaining - rotate <= 0) {
+            newAnimation = newAnimation.slice(1);
+          } else {
+            newAnimation[0] = { ...currentAnimation, value: remaining - rotate };
+          }
+          break;
         case 'goto':
           if (currentAnimation.x !== undefined && currentAnimation.y !== undefined) {
             newX = currentAnimation.x;
@@ -420,17 +456,27 @@ function App() {
             </div>
           </div>
 
-          <div className="w-1/2 bg-white p-4 rounded-lg relative" style={{ height: '600px' }}>
+          <div 
+            ref={stageRef}
+            className="w-1/2 bg-white p-4 rounded-lg relative" 
+            style={{ height: '600px' }}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
             {sprites.map(sprite => (
               <div
                 key={sprite.id}
-                className={`absolute cursor-pointer transition-transform group ${selectedSprite === sprite.id ? 'ring-2 ring-purple-500' : ''}`}
+                className={`absolute cursor-move transition-transform group ${selectedSprite === sprite.id ? 'ring-2 ring-purple-500' : ''} ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                 style={{
                   left: sprite.x,
                   top: sprite.y,
                   transform: `rotate(${sprite.direction}deg) scale(${sprite.size})`,
                 }}
                 onClick={() => setSelectedSprite(sprite.id)}
+                draggable={!isPlaying}
+                onDragStart={(e) => handleDragStart(e, sprite.id)}
+                onDrag={handleDrag}
+                onDragEnd={handleDragEnd}
               >
                 {getSpriteIcon(sprite.type, 48, `${
                   sprite.type === 'cat' ? 'text-orange-500' :
