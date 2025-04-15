@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, DragEvent } from 'react';
 import { Cat, Dog, Circle, User, Plus, Play, Pause, Trash2, RotateCcw, ArrowRight, ArrowDown, RotateCw, Move, Command as Random, MessageCircle, Maximize2, Minimize2, Repeat, Settings, FileText, Edit, BookOpen, Bug, Volume2, Shirt } from 'lucide-react';
 
 interface Sprite {
@@ -22,11 +22,23 @@ interface Animation {
   repeat?: number;
 }
 
+interface ActionBlock {
+  id: string;
+  type: Animation['type'];
+  value: number;
+  duration?: number;
+  x?: number;
+  y?: number;
+  repeat?: number;
+  label: string;
+}
+
 function App() {
   const [sprites, setSprites] = useState<Sprite[]>([]);
   const [selectedSprite, setSelectedSprite] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [actionBlocks, setActionBlocks] = useState<{ [spriteId: string]: ActionBlock[] }>({});
   const animationFrameRef = useRef<number>();
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -57,35 +69,24 @@ function App() {
     setSprites([]);
     setSelectedSprite(null);
     setIsPlaying(false);
+    setActionBlocks({});
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
   };
 
-  const addAnimation = (type: Animation['type'], value: number, duration?: number, x?: number, y?: number, repeat?: number) => {
-    if (!selectedSprite) return;
-    
-    const animation: Animation = { type, value, duration, x, y, repeat };
-    
-    setSprites(prev => prev.map(sprite => {
-      if (sprite.id === selectedSprite) {
-        return {
-          ...sprite,
-          animation: [...sprite.animation, animation]
-        };
-      }
-      return sprite;
-    }));
+  const handleActionDragStart = (e: DragEvent<HTMLDivElement>, action: Partial<ActionBlock>) => {
+    e.dataTransfer.setData('application/json', JSON.stringify(action));
   };
 
-  const handleDragStart = (e: React.DragEvent, spriteId: string) => {
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, spriteId: string) => {
     if (isPlaying) return;
     setIsDragging(true);
     setSelectedSprite(spriteId);
     e.dataTransfer.setData('text/plain', spriteId);
   };
 
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = (e: DragEvent) => {
     e.preventDefault();
   };
 
@@ -93,7 +94,11 @@ function App() {
     setIsDragging(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const spriteId = e.dataTransfer.getData('text/plain');
     const stage = stageRef.current;
@@ -113,8 +118,35 @@ function App() {
     setIsDragging(false);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleActionDrop = (e: DragEvent<HTMLDivElement>, spriteId: string) => {
     e.preventDefault();
+    try {
+      const actionData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const newAction: ActionBlock = {
+        id: `action-${Date.now()}`,
+        type: actionData.type,
+        value: actionData.value,
+        duration: actionData.duration,
+        x: actionData.x,
+        y: actionData.y,
+        repeat: actionData.repeat,
+        label: actionData.label
+      };
+
+      setActionBlocks(prev => ({
+        ...prev,
+        [spriteId]: [...(prev[spriteId] || []), newAction]
+      }));
+    } catch (error) {
+      console.error('Failed to parse action data:', error);
+    }
+  };
+
+  const removeAction = (spriteId: string, actionId: string) => {
+    setActionBlocks(prev => ({
+      ...prev,
+      [spriteId]: prev[spriteId].filter(action => action.id !== actionId)
+    }));
   };
 
   const getSpriteIcon = (type: Sprite['type'], size: number, className: string) => {
@@ -139,128 +171,62 @@ function App() {
     }
   };
 
-  const animate = (time: number) => {
-    setSprites(prev => prev.map(sprite => {
-      if (sprite.animation.length === 0) return sprite;
-
-      const currentAnimation = sprite.animation[0];
-      let newX = sprite.x;
-      let newY = sprite.y;
-      let newDirection = sprite.direction;
-      let newSize = sprite.size;
-      let newAnimation = [...sprite.animation];
-      let newSaying = sprite.saying;
-
-      switch (currentAnimation.type) {
-        case 'move':
-          const radians = (sprite.direction - 90) * Math.PI / 180;
-          newX += Math.cos(radians) * currentAnimation.value / 10;
-          newY += Math.sin(radians) * currentAnimation.value / 10;
-          break;
-        case 'moveX':
-          newX += currentAnimation.value / 10;
-          newAnimation = newAnimation.slice(1);
-          break;
-        case 'moveY':
-          newY += currentAnimation.value / 10;
-          newAnimation = newAnimation.slice(1);
-          break;
-        case 'turn':
-          const turnStep = 10;
-          const remaining = currentAnimation.value;
-          const rotate = Math.min(turnStep, remaining);
-          newDirection = (sprite.direction + rotate) % 360;
-          
-          if (remaining - rotate <= 0) {
-            newAnimation = newAnimation.slice(1);
-          } else {
-            newAnimation[0] = { ...currentAnimation, value: remaining - rotate };
-          }
-          break;
-        case 'goto':
-          if (currentAnimation.x !== undefined && currentAnimation.y !== undefined) {
-            newX = currentAnimation.x;
-            newY = currentAnimation.y;
-            newAnimation = newAnimation.slice(1);
-          }
-          break;
-        case 'random':
-          newX = Math.random() * 400 + 100;
-          newY = Math.random() * 400 + 100;
-          newAnimation = newAnimation.slice(1);
-          break;
-        case 'size':
-          newSize = Math.max(0.1, sprite.size + currentAnimation.value);
-          newAnimation = newAnimation.slice(1);
-          break;
-        case 'say':
-          newSaying = "Hello!";
-          if (currentAnimation.duration) {
-            setTimeout(() => {
-              setSprites(prev => prev.map(s => 
-                s.id === sprite.id ? { ...s, saying: '' } : s
-              ));
-            }, currentAnimation.duration * 1000);
-          }
-          newAnimation = newAnimation.slice(1);
-          break;
-      }
-
-      prev.forEach(otherSprite => {
-        if (otherSprite.id !== sprite.id) {
-          const dx = newX - otherSprite.x;
-          const dy = newY - otherSprite.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance < 50) {
-            const temp = sprite.animation;
-            newAnimation = otherSprite.animation;
-            setSprites(prev => prev.map(s => 
-              s.id === otherSprite.id 
-                ? { ...s, animation: temp }
-                : s
-            ));
-          }
-        }
-      });
-
-      if (currentAnimation.repeat && currentAnimation.repeat > 1) {
-        newAnimation = [
-          { ...currentAnimation, repeat: currentAnimation.repeat - 1 },
-          ...newAnimation.slice(1)
-        ];
-      }
-
-      return {
-        ...sprite,
-        x: newX,
-        y: newY,
-        direction: newDirection,
-        size: newSize,
-        saying: newSaying,
-        animation: newAnimation
-      };
-    }));
-
-    if (isPlaying) {
-      animationFrameRef.current = requestAnimationFrame(animate);
-    }
-  };
-
   useEffect(() => {
     if (isPlaying) {
-      animationFrameRef.current = requestAnimationFrame(animate);
-    } else {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      Object.entries(actionBlocks).forEach(([spriteId, actions]) => {
+        actions.forEach((action, index) => {
+          setTimeout(() => {
+            setSprites(prev => prev.map(sprite => {
+              if (sprite.id === spriteId) {
+                let newX = sprite.x;
+                let newY = sprite.y;
+                let newSize = sprite.size;
+                let newDirection = sprite.direction;
+                let newSaying = sprite.saying;
+
+                switch (action.type) {
+                  case 'moveX':
+                    newX += action.value;
+                    break;
+                  case 'moveY':
+                    newY += action.value;
+                    break;
+                  case 'move':
+                    const radians = (sprite.direction - 90) * Math.PI / 180;
+                    newX += Math.cos(radians) * action.value;
+                    newY += Math.sin(radians) * action.value;
+                    break;
+                  case 'turn':
+                    newDirection = (sprite.direction + action.value) % 360;
+                    break;
+                  case 'size':
+                    newSize = Math.max(0.1, sprite.size + action.value);
+                    break;
+                  case 'say':
+                    newSaying = "Hello!";
+                    break;
+                  case 'random':
+                    newX = Math.random() * 400 + 100;
+                    newY = Math.random() * 400 + 100;
+                    break;
+                }
+
+                return {
+                  ...sprite,
+                  x: newX,
+                  y: newY,
+                  size: newSize,
+                  direction: newDirection,
+                  saying: newSaying
+                };
+              }
+              return sprite;
+            }));
+          }, index * 1000);
+        });
+      });
     }
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [isPlaying]);
+  }, [isPlaying, actionBlocks]);
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -294,18 +260,6 @@ function App() {
           </button>
         </div>
       </nav>
-
-      <div className="bg-purple-100 p-2 flex items-center space-x-4 border-b border-purple-200">
-        <button className="p-2 hover:bg-purple-200 rounded-lg flex items-center gap-1">
-          <FileText size={16} /> Code
-        </button>
-        <button className="p-2 hover:bg-purple-200 rounded-lg flex items-center gap-1">
-          <Shirt size={16} /> Costumes
-        </button>
-        <button className="p-2 hover:bg-purple-200 rounded-lg flex items-center gap-1">
-          <Volume2 size={16} /> Sounds
-        </button>
-      </div>
 
       <div className="flex-1 p-4 bg-purple-50">
         <div className="flex gap-4 mb-4">
@@ -351,107 +305,119 @@ function App() {
         </div>
 
         <div className="flex gap-4">
-          <div className="w-1/4 bg-purple-200 p-4 rounded-lg">
-            <h2 className="text-xl font-bold mb-4">Actions</h2>
-            
-            <div className="space-y-4">
-              <div className="bg-purple-300 p-4 rounded-lg">
-                <h3 className="font-bold mb-2">Motion</h3>
-                <button 
-                  onClick={() => addAnimation('moveX', 50)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <ArrowRight size={20} /> Move X by 50
+          <div className="flex gap-4 w-1/2">
+            <div className="w-1/2 bg-purple-200 p-4 rounded-lg">
+              <h2 className="text-xl font-bold mb-4">Actions</h2>
+              <div className="space-y-4">
+                <div className="bg-purple-300 p-4 rounded-lg">
+                  <h3 className="font-bold mb-2">Motion</h3>
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveX', value: 50, label: 'Move X by 50' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <ArrowRight size={20} /> Move X by 50
+                    </div>
                   </div>
-                </button>
-                <button 
-                  onClick={() => addAnimation('moveY', 50)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <ArrowDown size={20} /> Move Y by 50
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveY', value: 50, label: 'Move Y by 50' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <ArrowDown size={20} /> Move Y by 50
+                    </div>
                   </div>
-                </button>
-                <button 
-                  onClick={() => addAnimation('turn', 360)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <RotateCw size={20} /> Rotate 360
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'turn', value: 90, label: 'Turn 90 degrees' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <RotateCw size={20} /> Turn 90°
+                    </div>
                   </div>
-                </button>
-                <button 
-                  onClick={() => addAnimation('goto', 0, undefined, 200, 200)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <Move size={20} /> Go to (0,0)
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'random', value: 0, label: 'Go to random position' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <Random size={20} /> Random Position
+                    </div>
                   </div>
-                </button>
-                <button 
-                  onClick={() => {
-                    addAnimation('moveX', -50);
-                    addAnimation('moveY', -50);
-                  }}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  Move X=-50 Y=-50
-                </button>
-                <button 
-                  onClick={() => addAnimation('random', 0)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <Random size={20} /> Go to random position
-                  </div>
-                </button>
-              </div>
+                </div>
 
-              <div className="bg-purple-300 p-4 rounded-lg">
-                <h3 className="font-bold mb-2">Looks</h3>
-                <button 
-                  onClick={() => addAnimation('say', 0)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <MessageCircle size={20} /> Say Hello
+                <div className="bg-purple-300 p-4 rounded-lg">
+                  <h3 className="font-bold mb-2">Looks</h3>
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'say', value: 0, duration: 2, label: 'Say Hello' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <MessageCircle size={20} /> Say Hello
+                    </div>
                   </div>
-                </button>
-                <button 
-                  onClick={() => addAnimation('say', 0, 1)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  Say Hello For 1 sec
-                </button>
-                <button 
-                  onClick={() => addAnimation('size', 0.1)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <Maximize2 size={20} /> Increase Size
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'size', value: 0.1, label: 'Increase Size' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <Maximize2 size={20} /> Increase Size
+                    </div>
                   </div>
-                </button>
-                <button 
-                  onClick={() => addAnimation('size', -0.1)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <Minimize2 size={20} /> Decrease Size
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'size', value: -0.1, label: 'Decrease Size' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <Minimize2 size={20} /> Decrease Size
+                    </div>
                   </div>
-                </button>
+                </div>
               </div>
+            </div>
 
-              <div className="bg-purple-300 p-4 rounded-lg">
-                <h3 className="font-bold mb-2">Control</h3>
-                <button 
-                  onClick={() => addAnimation('move', 100, undefined, undefined, undefined, 10)}
-                  className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600"
-                >
-                  <div className="flex items-center gap-2 justify-center">
-                    <Repeat size={20} /> Repeat 10 times
+            <div className="w-1/2 bg-purple-200 p-4 rounded-lg">
+              <h2 className="text-xl font-bold mb-4">Action Flow</h2>
+              <div className="space-y-4">
+                {sprites.map((sprite, index) => (
+                  <div 
+                    key={sprite.id}
+                    className="bg-purple-300 p-4 rounded-lg"
+                  >
+                    <h3 className="font-bold mb-2">Sprite {index + 1}</h3>
+                    <div 
+                      className="min-h-[100px] bg-purple-100 p-2 rounded-lg"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleActionDrop(e, sprite.id)}
+                    >
+                      {actionBlocks[sprite.id]?.map((action, actionIndex) => (
+                        <div 
+                          key={action.id}
+                          className="bg-purple-500 text-white px-4 py-2 rounded mb-2 flex items-center justify-between"
+                        >
+                          <span>{action.label}</span>
+                          <button
+                            onClick={() => removeAction(sprite.id, action.id)}
+                            className="text-white hover:text-red-200"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      {(!actionBlocks[sprite.id] || actionBlocks[sprite.id].length === 0) && (
+                        <div className="text-center text-gray-500 p-4">
+                          Drop actions here
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </button>
+                ))}
               </div>
             </div>
           </div>
@@ -498,52 +464,8 @@ function App() {
                     {sprite.saying}
                   </div>
                 )}
-                {sprite.thinking && (
-                  <div className="absolute top-0 left-full ml-2 bg-white p-2 rounded-lg shadow">
-                    💭 {sprite.thinking}
-                  </div>
-                )}
               </div>
             ))}
-          </div>
-
-          <div className="w-1/4 bg-purple-200 p-4 rounded-lg">
-            <h2 className="text-xl font-bold mb-4">Sprites</h2>
-            <div className="space-y-2">
-              {sprites.map((sprite, index) => (
-                <div 
-                  key={sprite.id}
-                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${
-                    selectedSprite === sprite.id ? 'bg-purple-300' : 'bg-purple-100 hover:bg-purple-200'
-                  }`}
-                  onClick={() => setSelectedSprite(sprite.id)}
-                >
-                  <div className="w-8 h-8 flex items-center justify-center">
-                    {getSpriteIcon(sprite.type, 24, `${
-                      sprite.type === 'cat' ? 'text-orange-500' :
-                      sprite.type === 'dog' ? 'text-brown-500' :
-                      sprite.type === 'ball' ? 'text-red-500' :
-                      'text-blue-500'
-                    }`)}
-                  </div>
-                  <span className="flex-1">Sprite {index + 1}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSprite(sprite.id);
-                    }}
-                    className="text-red-500 hover:text-red-700 p-1"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-              {sprites.length === 0 && (
-                <div className="text-center text-gray-500 p-4">
-                  No sprites added yet
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
