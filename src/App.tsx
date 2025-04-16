@@ -11,6 +11,9 @@ interface Sprite {
   thinking: string;
   animation: Animation[];
   size: number;
+  velocityX: number;
+  velocityY: number;
+  isAnimating: boolean;
 }
 
 interface Animation {
@@ -52,11 +55,130 @@ function App() {
       saying: '',
       thinking: '',
       animation: [],
-      size: 1
+      size: 1,
+      velocityX: 0,
+      velocityY: 0,
+      isAnimating: false
     };
     setSprites(prev => [...prev, newSprite]);
     setSelectedSprite(newSprite.id);
   };
+
+  const checkCollision = (sprite1: Sprite, sprite2: Sprite) => {
+    const size1 = 48 * sprite1.size;
+    const size2 = 48 * sprite2.size;
+    
+    return Math.abs(sprite1.x - sprite2.x) < (size1 + size2) / 2 &&
+           Math.abs(sprite1.y - sprite2.y) < (size1 + size2) / 2;
+  };
+
+  const handleCollisions = (sprites: Sprite[]) => {
+    for (let i = 0; i < sprites.length; i++) {
+      for (let j = i + 1; j < sprites.length; j++) {
+        if (checkCollision(sprites[i], sprites[j])) {
+          // Swap velocities
+          const tempVelocityX = sprites[i].velocityX;
+          const tempVelocityY = sprites[i].velocityY;
+          
+          sprites[i].velocityX = sprites[j].velocityX;
+          sprites[i].velocityY = sprites[j].velocityY;
+          
+          sprites[j].velocityX = tempVelocityX;
+          sprites[j].velocityY = tempVelocityY;
+
+          // Adjust positions to prevent sticking
+          const dx = sprites[j].x - sprites[i].x;
+          const dy = sprites[j].y - sprites[i].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const minDistance = (48 * sprites[i].size + 48 * sprites[j].size) / 2;
+          
+          if (distance < minDistance) {
+            const scale = (minDistance - distance) / distance;
+            sprites[i].x -= dx * scale / 2;
+            sprites[i].y -= dy * scale / 2;
+            sprites[j].x += dx * scale / 2;
+            sprites[j].y += dy * scale / 2;
+          }
+
+          // Make sprites say something on collision
+          sprites[i].saying = "Swapping!";
+          sprites[j].saying = "Bouncing!";
+
+          setTimeout(() => {
+            setSprites(prev => prev.map(sprite => 
+              (sprite.id === sprites[i].id || sprite.id === sprites[j].id) 
+                ? { ...sprite, saying: '' }
+                : sprite
+            ));
+          }, 1000);
+
+          // Swap action blocks
+          const sprite1Actions = actionBlocks[sprites[i].id] || [];
+          const sprite2Actions = actionBlocks[sprites[j].id] || [];
+          
+          setActionBlocks(prev => ({
+            ...prev,
+            [sprites[i].id]: sprite2Actions,
+            [sprites[j].id]: sprite1Actions
+          }));
+        }
+      }
+    }
+    return [...sprites];
+  };
+
+  useEffect(() => {
+    if (isPlaying) {
+      let lastTime = performance.now();
+      
+      const animate = (currentTime: number) => {
+        const deltaTime = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+
+        setSprites(prevSprites => {
+          const updatedSprites = prevSprites.map(sprite => {
+            if (!sprite.isAnimating) return sprite;
+
+            const newX = sprite.x + sprite.velocityX * deltaTime;
+            const newY = sprite.y + sprite.velocityY * deltaTime;
+            const stageWidth = stageRef.current?.clientWidth ?? 600;
+            const stageHeight = stageRef.current?.clientHeight ?? 600;
+            
+            // Bounce off walls
+            let newVelocityX = sprite.velocityX;
+            let newVelocityY = sprite.velocityY;
+            
+            if (newX <= 0 || newX >= stageWidth) {
+              newVelocityX = -sprite.velocityX;
+            }
+            if (newY <= 0 || newY >= stageHeight) {
+              newVelocityY = -sprite.velocityY;
+            }
+
+            return {
+              ...sprite,
+              x: Math.max(0, Math.min(newX, stageWidth)),
+              y: Math.max(0, Math.min(newY, stageHeight)),
+              velocityX: newVelocityX,
+              velocityY: newVelocityY
+            };
+          });
+
+          return handleCollisions(updatedSprites);
+        });
+
+        animationFrameRef.current = requestAnimationFrame(animate);
+      };
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
+    }
+  }, [isPlaying, actionBlocks]);
 
   const deleteSprite = (id: string) => {
     setSprites(prev => prev.filter(sprite => sprite.id !== id));
@@ -74,6 +196,79 @@ function App() {
       cancelAnimationFrame(animationFrameRef.current);
     }
   };
+
+  useEffect(() => {
+    if (isPlaying) {
+      Object.entries(actionBlocks).forEach(([spriteId, actions]) => {
+        actions.forEach((action, index) => {
+          setTimeout(() => {
+            setSprites(prev => prev.map(sprite => {
+              if (sprite.id === spriteId) {
+                let newX = sprite.x;
+                let newY = sprite.y;
+                let newSize = sprite.size;
+                let newDirection = sprite.direction;
+                let newSaying = sprite.saying;
+                let newVelocityX = sprite.velocityX;
+                let newVelocityY = sprite.velocityY;
+
+                switch (action.type) {
+                  case 'moveX':
+                    newVelocityX = action.value;
+                    break;
+                  case 'moveY':
+                    newVelocityY = action.value;
+                    break;
+                  case 'move':
+                    const radians = (sprite.direction - 90) * Math.PI / 180;
+                    newVelocityX = Math.cos(radians) * action.value;
+                    newVelocityY = Math.sin(radians) * action.value;
+                    break;
+                  case 'turn':
+                    newDirection = (sprite.direction + action.value) % 360;
+                    break;
+                  case 'size':
+                    newSize = Math.max(0.1, sprite.size + action.value);
+                    break;
+                  case 'say':
+                    newSaying = "Hello!";
+                    break;
+                  case 'random':
+                    newX = Math.random() * 400 + 100;
+                    newY = Math.random() * 400 + 100;
+                    break;
+                }
+
+                return {
+                  ...sprite,
+                  x: newX,
+                  y: newY,
+                  size: newSize,
+                  direction: newDirection,
+                  saying: newSaying,
+                  velocityX: newVelocityX,
+                  velocityY: newVelocityY,
+                  isAnimating: true
+                };
+              }
+              return sprite;
+            }));
+
+            // Stop animation after the last action
+            if (index === actions.length - 1) {
+              setTimeout(() => {
+                setSprites(prev => prev.map(sprite => 
+                  sprite.id === spriteId 
+                    ? { ...sprite, isAnimating: false, velocityX: 0, velocityY: 0 }
+                    : sprite
+                ));
+              }, 1000);
+            }
+          }, index * 1000);
+        });
+      });
+    }
+  }, [isPlaying, actionBlocks]);
 
   const handleActionDragStart = (e: DragEvent<HTMLDivElement>, action: Partial<ActionBlock>) => {
     e.dataTransfer.setData('application/json', JSON.stringify(action));
@@ -171,63 +366,6 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (isPlaying) {
-      Object.entries(actionBlocks).forEach(([spriteId, actions]) => {
-        actions.forEach((action, index) => {
-          setTimeout(() => {
-            setSprites(prev => prev.map(sprite => {
-              if (sprite.id === spriteId) {
-                let newX = sprite.x;
-                let newY = sprite.y;
-                let newSize = sprite.size;
-                let newDirection = sprite.direction;
-                let newSaying = sprite.saying;
-
-                switch (action.type) {
-                  case 'moveX':
-                    newX += action.value;
-                    break;
-                  case 'moveY':
-                    newY += action.value;
-                    break;
-                  case 'move':
-                    const radians = (sprite.direction - 90) * Math.PI / 180;
-                    newX += Math.cos(radians) * action.value;
-                    newY += Math.sin(radians) * action.value;
-                    break;
-                  case 'turn':
-                    newDirection = (sprite.direction + action.value) % 360;
-                    break;
-                  case 'size':
-                    newSize = Math.max(0.1, sprite.size + action.value);
-                    break;
-                  case 'say':
-                    newSaying = "Hello!";
-                    break;
-                  case 'random':
-                    newX = Math.random() * 400 + 100;
-                    newY = Math.random() * 400 + 100;
-                    break;
-                }
-
-                return {
-                  ...sprite,
-                  x: newX,
-                  y: newY,
-                  size: newSize,
-                  direction: newDirection,
-                  saying: newSaying
-                };
-              }
-              return sprite;
-            }));
-          }, index * 1000);
-        });
-      });
-    }
-  }, [isPlaying, actionBlocks]);
-
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <nav className="bg-purple-600 text-white p-2 flex items-center justify-between">
@@ -313,25 +451,43 @@ function App() {
                   <h3 className="font-bold mb-2">Motion</h3>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveX', value: 50, label: 'Move X by 50' })}
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveX', value: 100, label: 'Move Right' })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
                     <div className="flex items-center gap-2 justify-center">
-                      <ArrowRight size={20} /> Move X by 50
+                      <ArrowRight size={20} /> Move Right
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveY', value: 50, label: 'Move Y by 50' })}
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveX', value: -100, label: 'Move Left' })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
                     <div className="flex items-center gap-2 justify-center">
-                      <ArrowDown size={20} /> Move Y by 50
+                      <ArrowRight size={20} className="rotate-180" /> Move Left
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'turn', value: 90, label: 'Turn 90 degrees' })}
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveY', value: 50, label: 'Move Down' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <ArrowDown size={20} /> Move Down
+                    </div>
+                  </div>
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveY', value: -50, label: 'Move Up' })}
+                    className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
+                  >
+                    <div className="flex items-center gap-2 justify-center">
+                      <ArrowDown size={20} className="rotate-180" /> Move Up
+                    </div>
+                  </div>
+                  <div 
+                    draggable
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'turn', value: 90, label: 'Turn 90°' })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
                     <div className="flex items-center gap-2 justify-center">
@@ -340,7 +496,7 @@ function App() {
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'random', value: 0, label: 'Go to random position' })}
+                    onDragStart={(e) => handleActionDragStart(e, { type: 'random', value: 0, label: 'Random Position' })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
                     <div className="flex items-center gap-2 justify-center">
