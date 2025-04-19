@@ -1,40 +1,6 @@
 import React, { useState, useRef, useEffect, DragEvent } from 'react';
-import { Cat, Dog, Circle, User, Plus, Play, Pause, Trash2, RotateCcw, ArrowRight, ArrowDown, RotateCw, Move, Command as Random, MessageCircle, Maximize2, Minimize2, Repeat, Settings, FileText, Edit, BookOpen, Bug, Volume2, Shirt } from 'lucide-react';
-
-interface Sprite {
-  id: string;
-  type: 'cat' | 'dog' | 'ball' | 'human';
-  x: number;
-  y: number;
-  direction: number;
-  saying: string;
-  thinking: string;
-  animation: Animation[];
-  size: number;
-  velocityX: number;
-  velocityY: number;
-  isAnimating: boolean;
-}
-
-interface Animation {
-  type: 'move' | 'turn' | 'goto' | 'say' | 'think' | 'moveX' | 'moveY' | 'size' | 'random';
-  value: number;
-  duration?: number;
-  x?: number;
-  y?: number;
-  repeat?: number;
-}
-
-interface ActionBlock {
-  id: string;
-  type: Animation['type'];
-  value: number;
-  duration?: number;
-  x?: number;
-  y?: number;
-  repeat?: number;
-  label: string;
-}
+import { Plus, Play, Pause, RotateCcw, Settings, FileText, Edit, BookOpen, Bug, ArrowRight, ArrowDown, RotateCw, Command as Random, MessageCircle, Maximize2, Minimize2, Trash2 } from 'lucide-react';
+import { Sprite, ActionBlock } from './types/types';
 
 function App() {
   const [sprites, setSprites] = useState<Sprite[]>([]);
@@ -42,8 +8,45 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [actionBlocks, setActionBlocks] = useState<{ [spriteId: string]: ActionBlock[] }>({});
+  const [motionValues, setMotionValues] = useState({
+    moveRight: 100,
+    moveLeft: 100,
+    moveDown: 50,
+    moveUp: 50,
+    turn: 90,
+  });
+  
+  const [lookValues, setLookValues] = useState({
+    sayText: "Hello!",
+    increaseSize: 0.1,
+    decreaseSize: 0.1,
+  });
+  
   const animationFrameRef = useRef<number>();
   const stageRef = useRef<HTMLDivElement>(null);
+
+  const handleMotionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setMotionValues(prev => ({
+      ...prev,
+      [name]: parseFloat(value)
+    }));
+  };
+
+  const handleLookChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    if (name === 'sayText') {
+      setLookValues(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    } else {
+      setLookValues(prev => ({
+        ...prev,
+        [name]: parseFloat(value)
+      }));
+    }
+  };
 
   const addSprite = (type: Sprite['type']) => {
     const newSprite: Sprite = {
@@ -231,7 +234,7 @@ function App() {
                     newSize = Math.max(0.1, sprite.size + action.value);
                     break;
                   case 'say':
-                    newSaying = "Hello!";
+                    newSaying = action.label.split('"')[1] || "Hello!";
                     break;
                   case 'random':
                     newX = Math.random() * 400 + 100;
@@ -344,25 +347,80 @@ function App() {
     }));
   };
 
+  const updateActionValue = (spriteId: string, actionId: string, value: number) => {
+    setActionBlocks(prev => ({
+      ...prev,
+      [spriteId]: prev[spriteId].map(action => {
+        if (action.id === actionId) {
+          const updatedAction = { ...action, value };
+          
+          // Update the label to reflect the new value
+          if (action.type === 'moveX') {
+            updatedAction.label = value > 0 
+              ? `Move Right (${value}px)` 
+              : `Move Left (${Math.abs(value)}px)`;
+          } 
+          else if (action.type === 'moveY') {
+            updatedAction.label = value > 0 
+              ? `Move Down (${value}px)` 
+              : `Move Up (${Math.abs(value)}px)`;
+          }
+          else if (action.type === 'turn') {
+            updatedAction.label = `Turn (${value}°)`;
+          }
+          else if (action.type === 'size') {
+            updatedAction.label = value > 0 
+              ? `Increase Size (${value})` 
+              : `Decrease Size (${Math.abs(value)})`;
+          }
+          
+          return updatedAction;
+        }
+        return action;
+      })
+    }));
+  };
+
   const getSpriteIcon = (type: Sprite['type'], size: number, className: string) => {
     switch (type) {
       case 'cat':
         return (
           <img 
-            src="https://quizizz.com/media/resource/gs/quizizz-media/quizzes/a16db854-0c67-4e98-9e27-590dd764bc38?w=200&h=200"
+            src="https://media.istockphoto.com/id/1646321614/vector/simple-and-adorable-illustration-of-orange-tabby-cat-sitting-looking-sideways-flat-colored.jpg?s=612x612&w=0&k=20&c=sooXY4e9S6R6Z4XrR3g5VpZkhBlIgB_zZDMiWIY2pOc="
             alt="Cat"
-            width={size * 2.5}
-            height={size * 2.5}
+            width={size * 1.5}
+            height={size * 1.5}
             className={className}
             style={{ pointerEvents: 'none' }}
           />
         );
       case 'dog':
-        return <Dog size={size} className={className} />;
+        return <img 
+          src="https://easydraweverything.com/wp-content/uploads/2024/08/dog-drawing-easy-7.jpg" 
+          alt="Dog" 
+          width={size * 1.5} 
+          height={size * 1.5}
+          className={className}
+          style={{ pointerEvents: 'none' }}
+        />;
       case 'ball':
-        return <Circle size={size} className={className} />;
+     return <img 
+        src="https://media.istockphoto.com/id/172147072/photo/standard-basketball-on-white-surface.jpg?s=612x612&w=0&k=20&c=GL1N6YKxgv5ZGVzX48nCKSuSwE8ocui_PHEqKBDDzZI=" 
+        alt="Human" 
+        width={size * 1.5} 
+        height={size * 1.5}
+        className={className}
+        style={{ pointerEvents: 'none' }}
+      />;;
       case 'human':
-        return <User size={size} className={className} />;
+        return <img 
+          src="https://www.pngall.com/wp-content/uploads/5/User-Profile-PNG-Image.png" 
+          alt="Human" 
+          width={size * 1.5} 
+          height={size * 1.5}
+          className={className}
+          style={{ pointerEvents: 'none' }}
+        />;
     }
   };
 
@@ -429,7 +487,7 @@ function App() {
           </div>
           <button 
             onClick={() => setIsPlaying(!isPlaying)}
-            className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+            className={`flex items-center gap-2 ${isPlaying ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'} text-white px-4 py-2 rounded-lg`}
           >
             {isPlaying ? <Pause size={20} /> : <Play size={20} />}
             {isPlaying ? 'Stop' : 'Play'}
@@ -451,52 +509,141 @@ function App() {
                   <h3 className="font-bold mb-2">Motion</h3>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveX', value: 100, label: 'Move Right' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'moveX', 
+                      value: motionValues.moveRight, 
+                      label: `Move Right (${motionValues.moveRight}px)` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <ArrowRight size={20} /> Move Right
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <ArrowRight size={20} /> Move Right
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="moveRight"
+                          value={motionValues.moveRight} 
+                          onChange={handleMotionChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">px</span>
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveX', value: -100, label: 'Move Left' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'moveX', 
+                      value: -motionValues.moveLeft, 
+                      label: `Move Left (${motionValues.moveLeft}px)` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <ArrowRight size={20} className="rotate-180" /> Move Left
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <ArrowRight size={20} className="rotate-180" /> Move Left
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="moveLeft"
+                          value={motionValues.moveLeft} 
+                          onChange={handleMotionChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">px</span>
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveY', value: 50, label: 'Move Down' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'moveY', 
+                      value: motionValues.moveDown, 
+                      label: `Move Down (${motionValues.moveDown}px)` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <ArrowDown size={20} /> Move Down
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <ArrowDown size={20} /> Move Down
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="moveDown"
+                          value={motionValues.moveDown} 
+                          onChange={handleMotionChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">px</span>
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'moveY', value: -50, label: 'Move Up' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'moveY', 
+                      value: -motionValues.moveUp, 
+                      label: `Move Up (${motionValues.moveUp}px)` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <ArrowDown size={20} className="rotate-180" /> Move Up
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <ArrowDown size={20} className="rotate-180" /> Move Up
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="moveUp"
+                          value={motionValues.moveUp} 
+                          onChange={handleMotionChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">px</span>
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'turn', value: 90, label: 'Turn 90°' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'turn', 
+                      value: motionValues.turn, 
+                      label: `Turn (${motionValues.turn}°)` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <RotateCw size={20} /> Turn 90°
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <RotateCw size={20} /> Turn
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="turn"
+                          value={motionValues.turn} 
+                          onChange={handleMotionChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">°</span>
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'random', value: 0, label: 'Random Position' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'random', 
+                      value: 0, 
+                      label: 'Random Position' 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
                     <div className="flex items-center gap-2 justify-center">
@@ -509,29 +656,86 @@ function App() {
                   <h3 className="font-bold mb-2">Looks</h3>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'say', value: 0, duration: 2, label: 'Say Hello' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'say', 
+                      value: 0, 
+                      duration: 2, 
+                      label: `Say "${lookValues.sayText}"` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <MessageCircle size={20} /> Say Hello
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle size={20} /> Say
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="text" 
+                          name="sayText"
+                          value={lookValues.sayText} 
+                          onChange={handleLookChange}
+                          className="w-24 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'size', value: 0.1, label: 'Increase Size' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'size', 
+                      value: lookValues.increaseSize, 
+                      label: `Increase Size (${lookValues.increaseSize})` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <Maximize2 size={20} /> Increase Size
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <Maximize2 size={20} /> Increase Size
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="increaseSize"
+                          value={lookValues.increaseSize}
+                          step="0.1"
+                          min="0.1"
+                          max="2"
+                          onChange={handleLookChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">x</span>
+                      </div>
                     </div>
                   </div>
                   <div 
                     draggable
-                    onDragStart={(e) => handleActionDragStart(e, { type: 'size', value: -0.1, label: 'Decrease Size' })}
+                    onDragStart={(e) => handleActionDragStart(e, { 
+                      type: 'size', 
+                      value: -lookValues.decreaseSize, 
+                      label: `Decrease Size (${lookValues.decreaseSize})` 
+                    })}
                     className="block w-full bg-purple-500 text-white px-4 py-2 rounded mb-2 hover:bg-purple-600 cursor-move"
                   >
-                    <div className="flex items-center gap-2 justify-center">
-                      <Minimize2 size={20} /> Decrease Size
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <Minimize2 size={20} /> Decrease Size
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="number" 
+                          name="decreaseSize"
+                          value={lookValues.decreaseSize}
+                          step="0.1"
+                          min="0.1"
+                          max="2" 
+                          onChange={handleLookChange}
+                          className="w-16 px-1 py-0.5 text-black text-sm rounded" 
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-xs">x</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -546,7 +750,12 @@ function App() {
                     key={sprite.id}
                     className="bg-purple-300 p-4 rounded-lg"
                   >
-                    <h3 className="font-bold mb-2">Sprite {index + 1}</h3>
+                    <h3 className="font-bold mb-2 flex items-center gap-2">
+                      <span className="bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm">
+                        {index + 1}
+                      </span>
+                      {sprite.type.charAt(0).toUpperCase() + sprite.type.slice(1)} Sprite
+                    </h3>
                     <div 
                       className="min-h-[100px] bg-purple-100 p-2 rounded-lg"
                       onDragOver={handleDragOver}
@@ -555,19 +764,47 @@ function App() {
                       {actionBlocks[sprite.id]?.map((action, actionIndex) => (
                         <div 
                           key={action.id}
-                          className="bg-purple-500 text-white px-4 py-2 rounded mb-2 flex items-center justify-between"
+                          className="bg-purple-500 text-white px-4 py-2 rounded mb-2 flex items-center justify-between group hover:bg-purple-600 transition-colors"
                         >
-                          <span>{action.label}</span>
-                          <button
-                            onClick={() => removeAction(sprite.id, action.id)}
-                            className="text-white hover:text-red-200"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <span className="flex items-center gap-2">
+                            <span className="bg-purple-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                              {actionIndex + 1}
+                            </span>
+                            {action.label.split('(')[0].trim()}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {action.type !== 'random' && action.type !== 'say' && (
+                              <input
+                                type="number"
+                                value={Math.abs(action.value)}
+                                onChange={(e) => updateActionValue(
+                                  sprite.id, 
+                                  action.id, 
+                                  (action.type === 'moveX' && action.label.includes('Left')) || 
+                                  (action.type === 'moveY' && action.label.includes('Up')) || 
+                                  (action.type === 'size' && action.label.includes('Decrease'))
+                                    ? -parseFloat(e.target.value)
+                                    : parseFloat(e.target.value)
+                                )}
+                                className="w-12 px-1 py-0.5 text-black text-xs rounded" 
+                              />
+                            )}
+                            {action.type === 'say' && (
+                              <span className="text-xs bg-purple-400 px-1 rounded">
+                                {action.label.split('"')[1]}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => removeAction(sprite.id, action.id)}
+                              className="text-white opacity-70 hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                       {(!actionBlocks[sprite.id] || actionBlocks[sprite.id].length === 0) && (
-                        <div className="text-center text-gray-500 p-4">
+                        <div className="text-center text-gray-500 p-4 border-2 border-dashed border-gray-300 rounded-lg">
                           Drop actions here
                         </div>
                       )}
